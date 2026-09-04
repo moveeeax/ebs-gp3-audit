@@ -1,0 +1,12 @@
+# Built binary (anchored to repo root so it never matches a source dir)
+/ebs-gp3-audit
+/dist/
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# Keep fixtures tracked
+!testdata/**
+!examples/**

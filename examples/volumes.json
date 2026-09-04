@@ -1,0 +1,9 @@
+{
+  "volumes": [
+    { "id": "vol-0a1b2c3d", "type": "gp2", "size_gib": 500, "az": "us-east-1a" },
+    { "id": "vol-0e4f5a6b", "type": "gp2", "size_gib": 2000, "az": "us-east-1b" },
+    { "id": "vol-0c7d8e9f", "type": "io1", "size_gib": 200, "iops": 4000, "az": "us-east-1a" },
+    { "id": "vol-01a23b45", "type": "gp3", "size_gib": 300, "iops": 3000, "throughput": 125, "az": "us-east-1c" },
+    { "id": "vol-06f78c90", "type": "st1", "size_gib": 4000, "az": "us-east-1a" }
+  ]
+}
