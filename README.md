@@ -1,7 +1,7 @@
 # ebs-gp3-audit
 
 [![ci](https://github.com/moveeeax/ebs-gp3-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/moveeeax/ebs-gp3-audit/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/go-1.22%2B-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 gp3 is cheaper and faster than gp2 at every size, yet most AWS accounts are full
@@ -26,6 +26,8 @@ Prices default to us-east-1 list rates and are fully overridable with `--prices`
 for other regions or negotiated pricing.
 
 ## Install
+
+Requires Go 1.26 or newer.
 
 ```shell
 go install github.com/moveeeax/ebs-gp3-audit@latest
