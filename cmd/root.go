@@ -5,8 +5,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set at build time via -ldflags; it defaults to a dev marker.
-var Version = "v0.1.0-dev"
+// Version can be overridden at build time via -ldflags; it defaults to the
+// current release version.
+var Version = "v0.2.0"
 
 // NewRootCmd builds the root command tree.
 func NewRootCmd() *cobra.Command {
