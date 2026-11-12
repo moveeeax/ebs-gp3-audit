@@ -14,7 +14,7 @@ import (
 func planReport() audit.Report {
 	return audit.Audit([]audit.Volume{
 		{ID: "vol-gp2", Type: "gp2", SizeGiB: 500, Region: "eu-west-1"},
-		{ID: "vol-io2", Type: "io2", SizeGiB: 100, IOPS: 80000},
+		{ID: "vol-io2", Type: "io2", SizeGiB: 10, IOPS: 7000},
 		{ID: "vol-gp3", Type: "gp3", SizeGiB: 100, IOPS: 3000},
 		{ID: "vol-st1", Type: "st1", SizeGiB: 500},
 	}, audit.DefaultPrices(), audit.Options{})
@@ -30,7 +30,7 @@ func TestPlanScriptCommands(t *testing.T) {
 		"#!/usr/bin/env bash",
 		"up to 4 times in a rolling 24-hour period",
 		"modify --region 'eu-west-1' --volume-id 'vol-gp2' --volume-type gp3 --iops 3000 --throughput 250\n",
-		"modify --volume-id 'vol-io2' --volume-type gp3 --size 160 --iops 80000 --throughput 125\n",
+		"modify --volume-id 'vol-io2' --volume-type gp3 --size 15 --iops 7168 --throughput 1792\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("script missing %q:\n%s", want, out)
@@ -135,9 +135,9 @@ func TestPlanTerraform(t *testing.T) {
 	out := buf.String()
 	want := `    "vol-io2" = {
       volume_type = "gp3"
-      volume_size = 160
-      iops        = 80000
-      throughput  = 125
+      volume_size = 15
+      iops        = 7168
+      throughput  = 1792
     }
 `
 	if !strings.Contains(out, want) || !strings.Contains(out, `"vol-gp2" = {`) {

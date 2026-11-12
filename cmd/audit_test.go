@@ -74,7 +74,8 @@ func TestMatchPerformanceBaselineLowersGp3Cost(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 500 GiB gp2: $45 keeping 250 MiB/s, $40 at the 125 MiB/s baseline.
-	if !strings.Contains(gp2, "Unrealized saving: $289.00/mo") || !strings.Contains(base, "Unrealized saving: $299.00/mo") {
+	// 4000 IOPS io1: $36 keeping 500 MiB/s, $21 at the baseline.
+	if !strings.Contains(gp2, "Unrealized saving: $274.00/mo") || !strings.Contains(base, "Unrealized saving: $299.00/mo") {
 		t.Fatalf("unexpected totals:\ngp2:\n%s\nbaseline:\n%s", gp2, base)
 	}
 }

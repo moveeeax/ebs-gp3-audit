@@ -111,7 +111,7 @@ func newAuditCmd() *cobra.Command {
 	c.Flags().StringVar(&prices, "prices", "", "JSON file overriding the built-in price table")
 	c.Flags().Float64Var(&failOn, "fail-on", 0, "exit non-zero when unrealized monthly saving exceeds this many USD")
 	c.Flags().StringVar(&match, "match-performance", "gp2",
-		"gp2 target throughput: gp2 (keep the gp2 volume's throughput) or baseline (125 MiB/s)")
+		"gp3 target throughput for gp2/io1/io2: gp2 (keep the volume's current throughput) or baseline (125 MiB/s)")
 	c.Flags().StringVar(&emit, "emit", "", "write a migration plan for the candidates to this file")
 	c.Flags().StringVar(&emitFmt, "emit-format", "cli", "migration plan format: cli (aws ec2 modify-volume script) or terraform")
 	return c

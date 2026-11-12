@@ -47,15 +47,19 @@ type Report struct {
 	VolumeCount    int       `json:"volume_count"`
 }
 
-// Match selects which performance a gp2 volume's gp3 target must preserve.
+// Match selects which throughput the gp3 target of a gp2, io1 or io2 volume
+// must preserve.
 type Match string
 
 const (
-	// MatchGp2 provisions gp3 throughput to the gp2 volume's size-based
-	// throughput, so the migration does not lower it. This is the default.
+	// MatchGp2 provisions gp3 throughput to the throughput the volume delivers
+	// today (gp2: size-based table; io1/io2: derived from provisioned IOPS), so
+	// the migration does not lower it. A volume whose throughput gp3 cannot
+	// reach is not a candidate. This is the default.
 	MatchGp2 Match = "gp2"
-	// MatchBaseline prices gp2 volumes against gp3 at the free 125 MiB/s
-	// baseline throughput.
+	// MatchBaseline prices volumes against gp3 at the free 125 MiB/s baseline
+	// throughput (or the throughput recorded on the volume, if higher). The
+	// reason notes when that is below what the volume delivers today.
 	MatchBaseline Match = "baseline"
 )
 
@@ -168,6 +172,43 @@ func gp2Throughput(size int64) int64 {
 	return 250
 }
 
+// ioThroughput is the most throughput an io1 or io2 volume delivers at the
+// given provisioned IOPS, in MiB/s rounded up. DescribeVolumes returns no
+// Throughput for these types, so it is derived from the rules in "Amazon EBS
+// Provisioned IOPS SSD volumes"
+// (https://docs.aws.amazon.com/ebs/latest/userguide/provisioned-iops.html):
+//
+//   - io1 up to 32,000 IOPS: 256 KiB per IOPS (0.25 MiB/s), capped at
+//     500 MiB/s, reached at 2,000 IOPS.
+//   - io1 above 32,000 IOPS: 16 KiB per IOPS (1/64 MiB/s), up to 1,000 MiB/s
+//     at 64,000 IOPS.
+//   - io2 (all io2 volumes are Block Express since April 30, 2025):
+//     0.256 MiB/s per IOPS, up to 4,000 MiB/s.
+func ioThroughput(typ string, iops int64) int64 {
+	if iops <= 0 {
+		return 0
+	}
+	switch typ {
+	case "io1":
+		if iops <= 32000 {
+			return min((iops+3)/4, 500)
+		}
+		return min((iops+63)/64, 1000)
+	case "io2":
+		return min((iops*256+999)/1000, 4000)
+	}
+	return 0
+}
+
+// belowCurrent is the reason note for a baseline-mode target whose throughput
+// is lower than what the volume delivers today.
+func belowCurrent(typ string, target, current int64) []string {
+	if current <= target {
+		return nil
+	}
+	return []string{fmt.Sprintf("gp3 throughput %d MiB/s is below the %s volume's %d MiB/s", target, typ, current)}
+}
+
 // withNotes appends the target adjustments to a reason.
 func withNotes(reason string, notes []string) string {
 	for _, n := range notes {
@@ -205,6 +246,9 @@ func assess(v Volume, p Prices, o Options) Finding {
 			f.Reason = notes[0]
 			return f
 		}
+		if o.Match == MatchBaseline {
+			notes = append(notes, belowCurrent(v.Type, c.Throughput, gp2Throughput(v.SizeGiB))...)
+		}
 		gp3 := gp3Cost(c.SizeGiB, c.IOPS, c.Throughput, p)
 		f.Gp3Monthly = round2(gp3)
 		f.MonthlySaving = round2(current - gp3)
@@ -224,11 +268,31 @@ func assess(v Volume, p Prices, o Options) Finding {
 		}
 		current := float64(v.SizeGiB)*gbPrice + float64(v.IOPS)*iopsPrice
 		f.CurrentMonthly = round2(current)
-		c, notes, ok := gp3Target(v.SizeGiB, v.IOPS, v.Throughput, p)
+		// Keep the throughput the volume delivers today, unless baseline mode
+		// asks for gp3 pricing at the free baseline. A throughput recorded on
+		// the volume (snapshot files may carry one) is kept in both modes.
+		have := max(v.Throughput, ioThroughput(v.Type, v.IOPS))
+		tput := v.Throughput
+		var pre []string
+		if o.Match != MatchBaseline {
+			tput = have
+			if have > v.Throughput && have > p.Gp3BaselineThroughput {
+				pre = []string{fmt.Sprintf("%s delivers %d MiB/s at %d IOPS", v.Type, have, v.IOPS)}
+			}
+		}
+		c, notes, ok := gp3Target(v.SizeGiB, v.IOPS, tput, p)
 		if !ok {
-			f.Reason = "provisioned " + notes[0]
+			if pre != nil {
+				f.Reason = pre[0] + "; " + notes[0]
+			} else {
+				f.Reason = "provisioned " + notes[0]
+			}
 			return f
 		}
+		if o.Match == MatchBaseline {
+			notes = append(notes, belowCurrent(v.Type, c.Throughput, have)...)
+		}
+		notes = append(pre, notes...)
 		gp3 := gp3Cost(c.SizeGiB, c.IOPS, c.Throughput, p)
 		f.Gp3Monthly = round2(gp3)
 		f.MonthlySaving = round2(current - gp3)
