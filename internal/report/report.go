@@ -21,7 +21,7 @@ func JSON(w io.Writer, r audit.Report) error {
 // Table writes an aligned, human-readable summary.
 func Table(w io.Writer, r audit.Report) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "VOLUME\tTYPE\tSIZE(GiB)\tNOW($/mo)\tGP3($/mo)\tSAVING($/mo)\tSTATUS")
+	fmt.Fprintln(tw, "VOLUME\tTYPE\tSIZE(GiB)\tNOW($/mo)\tGP3($/mo)\tSAVING($/mo)\tGP3 SIZE(GiB)\tGP3 IOPS\tGP3 TPUT(MiB/s)\tSTATUS")
 	findings := append([]audit.Finding(nil), r.Findings...)
 	sort.SliceStable(findings, func(i, j int) bool {
 		return findings[i].MonthlySaving > findings[j].MonthlySaving
@@ -34,8 +34,15 @@ func Table(w io.Writer, r audit.Report) error {
 		case f.Compliant:
 			status = "ok-gp3"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%.2f\t%.2f\t%.2f\t%s\n",
-			f.VolumeID, f.Type, f.SizeGiB, f.CurrentMonthly, f.Gp3Monthly, f.MonthlySaving, status)
+		gSize, gIOPS, gTput := "-", "-", "-"
+		if f.Gp3IOPS > 0 {
+			gSize = fmt.Sprint(f.Gp3SizeGiB)
+			gIOPS = fmt.Sprint(f.Gp3IOPS)
+			gTput = fmt.Sprint(f.Gp3Throughput)
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%.2f\t%.2f\t%.2f\t%s\t%s\t%s\t%s\n",
+			f.VolumeID, f.Type, f.SizeGiB, f.CurrentMonthly, f.Gp3Monthly, f.MonthlySaving,
+			gSize, gIOPS, gTput, status)
 	}
 	fmt.Fprintf(tw, "\nCandidates: %d/%d\tUnrealized saving: $%.2f/mo\n",
 		r.CandidateCount, r.VolumeCount, r.TotalSaving)
@@ -130,6 +137,9 @@ func SARIF(w io.Writer, r audit.Report, version string) error {
 			"currentMonthlyUsd": f.CurrentMonthly,
 			"gp3MonthlyUsd":     f.Gp3Monthly,
 			"monthlySavingUsd":  f.MonthlySaving,
+			"gp3SizeGib":        f.Gp3SizeGiB,
+			"gp3Iops":           f.Gp3IOPS,
+			"gp3Throughput":     f.Gp3Throughput,
 		}
 		log.Runs[0].Results = append(log.Runs[0].Results, res)
 	}
