@@ -23,8 +23,19 @@ The optional migration plan is a file you review and run yourself.
    savings estimate stays honest for large volumes.
    - gp2 throughput is taken from the AWS gp2 table (128 MiB/s up to 170 GiB,
      250 MiB/s above) and the gp3 target is provisioned to match, so the
-     migration does not lower throughput. `--match-performance baseline`
-     prices gp2 against gp3 at 125 MiB/s instead.
+     migration does not lower throughput.
+   - `DescribeVolumes` returns no throughput for io1/io2, so it is derived
+     from provisioned IOPS per the
+     [Provisioned IOPS SSD docs](https://docs.aws.amazon.com/ebs/latest/userguide/provisioned-iops.html):
+     io1 delivers 0.25 MiB/s per IOPS up to 500 MiB/s (reached at 2,000 IOPS),
+     then 16 KiB per IOPS above 32,000 IOPS, up to 1,000 MiB/s at 64,000 IOPS;
+     io2 (Block Express) delivers 0.256 MiB/s per IOPS, up to 4,000 MiB/s.
+     The gp3 target keeps that throughput, adding IOPS for the 0.25 MiB/s per
+     IOPS rule. An io2 volume above 2,000 MiB/s (more than 7,812 IOPS) has no
+     gp3 equivalent and is not a candidate; the reason says why.
+   - `--match-performance baseline` prices gp2/io1/io2 against gp3 at
+     125 MiB/s instead, and the reason notes the throughput the volume would
+     lose.
    - The gp3 target follows the gp3 limits: up to 64 TiB, 80,000 IOPS and
      2,000 MiB/s, at most 500 IOPS per GiB and 0.25 MiB/s per provisioned
      IOPS. When a volume needs more IOPS than its size allows, the target is
@@ -73,13 +84,13 @@ Example table output:
 
 ```text
 VOLUME        TYPE  SIZE(GiB)  NOW($/mo)  GP3($/mo)  SAVING($/mo)  GP3 SIZE(GiB)  GP3 IOPS  GP3 TPUT(MiB/s)  STATUS
-vol-0c7d8e9f  io1   200        285.00     21.00      264.00        200            4000      125              MIGRATE
+vol-0c7d8e9f  io1   200        285.00     36.00      249.00        200            4000      500              MIGRATE
 vol-0e4f5a6b  gp2   2000       200.00     180.00     20.00         2000           6000      250              MIGRATE
 vol-0a1b2c3d  gp2   500        50.00      45.00      5.00          500            3000      250              MIGRATE
 vol-01a23b45  gp3   300        24.00      24.00      0.00          300            3000      125              ok-gp3
 vol-06f78c90  st1   4000       0.00       0.00       0.00          -              -         -                skip
 
-Candidates: 3/5  Unrealized saving: $289.00/mo
+Candidates: 3/5  Unrealized saving: $274.00/mo
 ```
 
 JSON findings carry the same target as `gp3_size_gib`, `gp3_iops` and
@@ -94,7 +105,7 @@ JSON findings carry the same target as `gp3_size_gib`, `gp3_iops` and
 | `--from-file` | — | read volumes from a JSON snapshot instead of AWS |
 | `--prices` | built-in | JSON file overriding the price table |
 | `--fail-on` | — | exit non-zero when unrealized monthly saving exceeds this many USD |
-| `--match-performance` | `gp2` | gp2 target throughput: `gp2` keeps the gp2 volume's throughput, `baseline` prices at 125 MiB/s |
+| `--match-performance` | `gp2` | gp3 target throughput for gp2/io1/io2: `gp2` keeps the volume's current throughput, `baseline` prices at 125 MiB/s |
 | `--emit` | — | write a migration plan for the candidates to this file |
 | `--emit-format` | `cli` | plan format: `cli` (`aws ec2 modify-volume` script) or `terraform` |
 
