@@ -13,7 +13,7 @@ func sampleReport() audit.Report {
 	return audit.Audit([]audit.Volume{
 		{ID: "vol-gp2", Type: "gp2", SizeGiB: 500},
 		{ID: "vol-gp3", Type: "gp3", SizeGiB: 100, IOPS: 3000},
-	}, audit.DefaultPrices())
+	}, audit.DefaultPrices(), audit.Options{})
 }
 
 func TestJSONRoundTrips(t *testing.T) {
@@ -28,6 +28,13 @@ func TestJSONRoundTrips(t *testing.T) {
 	if got.CandidateCount != 1 || got.VolumeCount != 2 {
 		t.Fatalf("json report lost data: %+v", got)
 	}
+	// 500 GiB gp2 delivers 250 MiB/s; the gp3 target keeps it.
+	if f := got.Findings[0]; f.Gp3IOPS != 3000 || f.Gp3Throughput != 250 || f.Gp3SizeGiB != 500 {
+		t.Fatalf("json lost the gp3 target config: %+v", f)
+	}
+	if !strings.Contains(buf.String(), `"gp3_throughput": 250`) {
+		t.Fatalf("json missing gp3_throughput:\n%s", buf.String())
+	}
 }
 
 func TestTableHasHeaderAndTotals(t *testing.T) {
@@ -36,7 +43,7 @@ func TestTableHasHeaderAndTotals(t *testing.T) {
 		t.Fatalf("Table: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"VOLUME", "SAVING($/mo)", "MIGRATE", "Unrealized saving"} {
+	for _, want := range []string{"VOLUME", "SAVING($/mo)", "GP3 IOPS", "GP3 TPUT(MiB/s)", "MIGRATE", "Unrealized saving"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("table missing %q:\n%s", want, out)
 		}

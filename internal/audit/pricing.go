@@ -6,8 +6,11 @@ import (
 	"os"
 )
 
-// Prices holds the monthly EBS unit prices used to estimate migration savings.
-// Defaults are us-east-1 on-demand list prices; override per region with a file.
+// Prices holds the monthly EBS unit prices used to estimate migration savings,
+// plus the gp3 limits the target volume must fit in. Defaults are us-east-1
+// on-demand list prices and the gp3 limits AWS published in September 2025;
+// override per region (or for regions and Outposts still on the old limits)
+// with a file.
 type Prices struct {
 	Gp2GB                 float64 `json:"gp2_gb"`
 	Gp3GB                 float64 `json:"gp3_gb"`
@@ -21,6 +24,12 @@ type Prices struct {
 	Gp3BaselineThroughput int64   `json:"gp3_baseline_throughput"`
 	Gp3MaxIOPS            int64   `json:"gp3_max_iops"`
 	Gp3MaxThroughput      int64   `json:"gp3_max_throughput"`
+	Gp3MaxSizeGiB         int64   `json:"gp3_max_size_gib"`
+	// Gp3IOPSPerGiB is the most IOPS a gp3 volume may provision per GiB.
+	Gp3IOPSPerGiB int64 `json:"gp3_iops_per_gib"`
+	// Gp3ThroughputPerIOPS is the most MiB/s a gp3 volume may provision per
+	// provisioned IOPS.
+	Gp3ThroughputPerIOPS float64 `json:"gp3_throughput_per_iops"`
 }
 
 // DefaultPrices returns the built-in us-east-1 price table.
@@ -36,8 +45,11 @@ func DefaultPrices() Prices {
 		Io2IOPS:               0.065,
 		Gp3BaselineIOPS:       3000,
 		Gp3BaselineThroughput: 125,
-		Gp3MaxIOPS:            16000,
-		Gp3MaxThroughput:      1000,
+		Gp3MaxIOPS:            80000,
+		Gp3MaxThroughput:      2000,
+		Gp3MaxSizeGiB:         65536,
+		Gp3IOPSPerGiB:         500,
+		Gp3ThroughputPerIOPS:  0.25,
 	}
 }
 
@@ -52,14 +64,29 @@ func LoadPrices(path string) (Prices, error) {
 	if err := json.Unmarshal(b, &p); err != nil {
 		return p, fmt.Errorf("parse prices %q: %w", path, err)
 	}
+	// Zero or negative limits would make every volume fail the gp3 checks, so
+	// treat them as "not set" and fall back to the defaults.
+	d := DefaultPrices()
 	if p.Gp3BaselineIOPS <= 0 {
-		p.Gp3BaselineIOPS = 3000
+		p.Gp3BaselineIOPS = d.Gp3BaselineIOPS
 	}
 	if p.Gp3BaselineThroughput <= 0 {
-		p.Gp3BaselineThroughput = 125
+		p.Gp3BaselineThroughput = d.Gp3BaselineThroughput
 	}
 	if p.Gp3MaxIOPS <= 0 {
-		p.Gp3MaxIOPS = 16000
+		p.Gp3MaxIOPS = d.Gp3MaxIOPS
+	}
+	if p.Gp3MaxThroughput <= 0 {
+		p.Gp3MaxThroughput = d.Gp3MaxThroughput
+	}
+	if p.Gp3MaxSizeGiB <= 0 {
+		p.Gp3MaxSizeGiB = d.Gp3MaxSizeGiB
+	}
+	if p.Gp3IOPSPerGiB <= 0 {
+		p.Gp3IOPSPerGiB = d.Gp3IOPSPerGiB
+	}
+	if p.Gp3ThroughputPerIOPS <= 0 {
+		p.Gp3ThroughputPerIOPS = d.Gp3ThroughputPerIOPS
 	}
 	return p, nil
 }
